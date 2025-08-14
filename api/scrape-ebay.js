@@ -182,6 +182,15 @@ async function scrapePage(searchTerm, page) {
     const listings = extractListingData(html);
     
     console.log(`✅ Page ${page}: Found ${listings.length} items`);
+    
+    // Debug: Log raw HTML snippet and parsed items
+    console.log(`Debug Page ${page}:`, {
+      htmlLength: html.length,
+      hasItems: items.length,
+      firstItemText: items[1] ? items[1].textContent.substring(0, 200) : 'No second item',
+      sampleTitle: items[1] ? items[1].querySelector('.s-item__title')?.textContent : 'No title found'
+    });
+    
     return listings;
     
   } catch (error) {
@@ -222,6 +231,8 @@ export default async function handler(req, res) {
   try {
     const allResults = [];
     
+    console.log(`Debug: Starting scrape for "${searchTerm}" with ${pages} pages`);
+    
     // Process pages in parallel for maximum speed
     const pagePromises = [];
     for (let page = 1; page <= pages; page++) {
@@ -231,22 +242,25 @@ export default async function handler(req, res) {
     const pageResults = await Promise.all(pagePromises);
     
     // Combine all results
-    pageResults.forEach(results => {
+    pageResults.forEach((results, index) => {
+      console.log(`Page ${index + 1} returned ${results.length} items`);
       allResults.push(...results);
     });
     
     const endTime = Date.now();
     const duration = ((endTime - startTime) / 1000).toFixed(1);
     
-    console.log(`✅ Completed in ${duration}s - Found ${allResults.length} items`);
+    console.log(`✅ Completed in ${duration}s - Total items found: ${allResults.length}`);
     
+    // Return results even if empty for debugging
     res.status(200).json({
       success: true,
       searchTerm,
       totalItems: allResults.length,
       pages,
       duration,
-      data: allResults
+      data: allResults,
+      debug: allResults.length === 0 ? 'Check Vercel function logs for parsing details' : undefined
     });
     
   } catch (error) {

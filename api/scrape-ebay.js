@@ -35,6 +35,8 @@ function buildEbayUrl(searchTerm, pageNumber = 1) {
 
 // Helper function to extract listing data
 function extractListingData(html) {
+  console.log('Starting data extraction...');
+  
   const dom = new JSDOM(html);
   const doc = dom.window.document;
   const listings = [];
@@ -44,8 +46,11 @@ function extractListingData(html) {
   
   for (const selector of itemSelectors) {
     items = doc.querySelectorAll(selector);
+    console.log(`Selector "${selector}" found ${items.length} items`);
     if (items.length > 0) break;
   }
+
+  console.log(`Total items found: ${items.length}`);
 
   Array.from(items).forEach((item, index) => {
     if (index === 0) return; // Skip first item (usually ad)
@@ -58,20 +63,12 @@ function extractListingData(html) {
         const nameEl = item.querySelector(selector);
         if (nameEl) {
           itemName = nameEl.textContent.trim();
-          // Clean up the title
-          itemName = itemName
-            .replace(/^New Listing/i, '')
-            .replace(/Opens in a new window or tab.*$/i, '')
-            .replace(/Pre-Owned.*$/i, 'Pre-Owned')
-            .replace(/View similar active items.*$/i, '')
-            .replace(/Sell one like this.*$/i, '')
-            .trim();
-          
-          if (itemName.length > 80) {
-            itemName = itemName.substring(0, 80) + '...';
-          }
           break;
         }
+      }
+
+      if (index === 1) {
+        console.log(`Sample item name: "${itemName}"`);
       }
 
       // Filter out promotional/ad items
@@ -84,7 +81,23 @@ function extractListingData(html) {
         itemName.toLowerCase().includes(keyword)
       );
       
-      if (isAdItem) return; // Skip this item
+      if (isAdItem) {
+        console.log(`Skipping ad: ${itemName}`);
+        return; // Skip this item
+      }
+
+      // Clean up the title
+      itemName = itemName
+        .replace(/^New Listing/i, '')
+        .replace(/Opens in a new window or tab.*$/i, '')
+        .replace(/Pre-Owned.*$/i, 'Pre-Owned')
+        .replace(/View similar active items.*$/i, '')
+        .replace(/Sell one like this.*$/i, '')
+        .trim();
+      
+      if (itemName.length > 80) {
+        itemName = itemName.substring(0, 80) + '...';
+      }
 
       // Get sold price
       const priceSelectors = ['.s-item__price .notranslate', '.s-item__price', '[data-testid="item-price"]'];
@@ -96,6 +109,10 @@ function extractListingData(html) {
           soldPrice = soldPrice.replace(/\s*to\s*\$.*$/i, ''); // Remove price ranges
           break;
         }
+      }
+
+      if (index === 1) {
+        console.log(`Sample price: "${soldPrice}"`);
       }
 
       // Get sold date
@@ -148,12 +165,21 @@ function extractListingData(html) {
           imageUrl: imageUrl || '',
           url: itemUrl
         });
+        
+        if (listings.length === 1) {
+          console.log(`First valid item added: ${itemName} - ${soldPrice}`);
+        }
+      } else {
+        if (index === 1) {
+          console.log(`Item skipped - Name: "${itemName}", Price: "${soldPrice}"`);
+        }
       }
     } catch (error) {
-      console.warn('Error extracting item data:', error);
+      console.warn(`Error extracting item ${index}:`, error.message);
     }
   });
 
+  console.log(`Extraction complete: ${listings.length} valid items found`);
   return listings;
 }
 
@@ -179,17 +205,14 @@ async function scrapePage(searchTerm, page) {
     }
 
     const html = await response.text();
+    
+    // Debug: Log what we got from eBay
+    console.log(`Page ${page} HTML length: ${html.length}`);
+    console.log(`Page ${page} HTML sample:`, html.substring(0, 500));
+    
     const listings = extractListingData(html);
     
     console.log(`✅ Page ${page}: Found ${listings.length} items`);
-    
-    // Debug: Log raw HTML snippet and parsed items
-    console.log(`Debug Page ${page}:`, {
-      htmlLength: html.length,
-      hasItems: items.length,
-      firstItemText: items[1] ? items[1].textContent.substring(0, 200) : 'No second item',
-      sampleTitle: items[1] ? items[1].querySelector('.s-item__title')?.textContent : 'No title found'
-    });
     
     return listings;
     

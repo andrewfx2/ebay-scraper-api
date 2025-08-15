@@ -3,8 +3,8 @@ const { HttpsProxyAgent } = require('https-proxy-agent');
 const fetch = require('node-fetch');
 const { JSDOM } = require('jsdom');
 
-// Decodo proxy configuration
-const DECODO_PROXY = 'http://sp4c5esam0:j1w8CnMf2ktsLz=m8A@gate.decodo.com:10001';
+// Decodo proxy configuration - Updated for US region
+const DECODO_PROXY = 'http://sp4c5esam0:j1w8CnMf2ktsLz=m8A@us.decodo.com:10001';
 const proxyAgent = new HttpsProxyAgent(DECODO_PROXY);
 
 // Helper function to build eBay URL

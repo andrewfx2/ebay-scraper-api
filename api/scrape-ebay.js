@@ -1,4 +1,4 @@
-// api/scrape-ebay.js - Vercel Serverless Function
+// api/scrape-ebay.js - Vercel Serverless Function - FIXED WITH WORKING LOGIC
 const { HttpsProxyAgent } = require('https-proxy-agent');
 const fetch = require('node-fetch');
 const { JSDOM } = require('jsdom');
@@ -44,7 +44,7 @@ function buildEbayUrl(searchTerm, pageNumber = 1) {
   return url;
 }
 
-// Helper function to extract listing data - UPDATED FOR NEW EBAY LAYOUT
+// Helper function to extract listing data - USING WORKING LOGIC FROM PREVIOUS CODE
 function extractListingData(html) {
   console.log('Starting data extraction...');
   
@@ -52,7 +52,6 @@ function extractListingData(html) {
   const doc = dom.window.document;
   const listings = [];
 
-  // Updated selectors for current eBay layout
   const itemSelectors = ['.s-item', '[data-testid="item-cell"]', '.srp-item'];
   let items = [];
   
@@ -68,53 +67,33 @@ function extractListingData(html) {
     if (index === 0) return; // Skip first item (usually ad)
 
     try {
-      // UPDATED: Get item name from new eBay structure - Target the actual link
+      // RESTORED: Get clean item name using WORKING selectors from previous code
+      const nameSelectors = ['.s-item__title', '[data-testid="item-title"]', '.it-ttl a', 'h3 a'];
       let itemName = '';
-      
-      // Try to get clean title from the actual item link first
-      const linkSelectors = [
-        '.s-item_title a', 
-        '.s-item__title a',
-        'h3 a',
-        '.it-ttl a'
-      ];
-      
-      for (const selector of linkSelectors) {
-        const linkEl = item.querySelector(selector);
-        if (linkEl && linkEl.textContent.trim()) {
-          itemName = linkEl.textContent.trim();
-          console.log(`Found title via link (${selector}): "${itemName}"`);
-          break;
-        }
-      }
-      
-      // If no clean link text found, try other methods
-      if (!itemName) {
-        const titleEl = item.querySelector('.s-item_title span[role="heading"]');
-        if (titleEl) {
-          itemName = titleEl.textContent.trim();
-          console.log(`Found title via span: "${itemName}"`);
-        } else {
-          // Final fallback selectors
-          const fallbackSelectors = [
-            '.s-item__title', 
-            '[data-testid="item-title"]',
-            '.s-item_title'
-          ];
+      for (const selector of nameSelectors) {
+        const nameEl = item.querySelector(selector);
+        if (nameEl) {
+          itemName = nameEl.textContent.trim();
+          // Clean up the title - USING PROVEN LOGIC
+          itemName = itemName
+            .replace(/^New Listing/i, '')
+            .replace(/Opens in a new window or tab.*$/i, '')
+            .replace(/Pre-Owned.*$/i, 'Pre-Owned')
+            .replace(/View similar active items.*$/i, '')
+            .replace(/Sell one like this.*$/i, '')
+            .trim();
           
-          for (const selector of fallbackSelectors) {
-            const nameEl = item.querySelector(selector);
-            if (nameEl) {
-              itemName = nameEl.textContent.trim();
-              console.log(`Found title via fallback (${selector}): "${itemName}"`);
-              break;
-            }
+          // Limit title length to avoid super long descriptions
+          if (itemName.length > 80) {
+            itemName = itemName.substring(0, 80) + '...';
           }
+          
+          break;
         }
       }
 
       if (index === 1) {
-        console.log(`Sample item name RAW: "${itemName}"`);
+        console.log(`Sample item name: "${itemName}"`);
       }
 
       // Filter out promotional/ad items
@@ -132,127 +111,99 @@ function extractListingData(html) {
         return; // Skip this item
       }
 
-      // ENHANCED: Clean up the title - remove ALL eBay interface elements
-      itemName = itemName
-        .replace(/^New Listing/i, '')
-        .replace(/Opens in a new window or tab.*$/i, '')
-        .replace(/Pre-Owned.*$/i, '')
-        .replace(/New \(Other\).*$/i, '')
-        .replace(/Used.*$/i, '')
-        .replace(/View similar active items.*$/i, '')
-        .replace(/Sell one like this.*$/i, '')
-        .replace(/Buy It Now.*$/i, '')
-        .replace(/Best Offer.*$/i, '')
-        .replace(/\$[\d,]+\.?\d*.*$/i, '') // Remove price info mixed in title
-        .replace(/Located in.*$/i, '')
-        .replace(/\d+% positive.*$/i, '')
-        .replace(/\d+ bids.*$/i, '')
-        .replace(/\+\$[\d,]+\.?\d* delivery.*$/i, '')
-        .replace(/Free shipping.*$/i, '')
-        .replace(/\s+delivery.*$/i, '')
-        .replace(/Click to view.*$/i, '')
-        .trim();
-
-      // Remove any trailing condition info that got mixed in
-      itemName = itemName
-        .replace(/\s*-\s*Pre-Owned\s*$/i, '')
-        .replace(/\s*-\s*New\s*$/i, '')
-        .replace(/\s*-\s*Used\s*$/i, '')
-        .replace(/\s*Pre-Owned\s*$/i, '')
-        .replace(/\s*New\s*$/i, '')
-        .replace(/\s*Used\s*$/i, '')
-        .trim();
-      
-      if (index === 1) {
-        console.log(`Sample item name CLEANED: "${itemName}"`);
-      }
-      
-      if (itemName.length > 100) {
-        itemName = itemName.substring(0, 100) + '...';
-      }
-
-      // UPDATED: Get sold price from new eBay structure
+      // RESTORED: Get clean sold price using WORKING selectors
+      const priceSelectors = ['.s-item__price .notranslate', '.s-item__price', '[data-testid="item-price"]'];
       let soldPrice = '';
-      
-      // Primary selector for new layout - look for POSITIVE ITALIC span
-      const priceEl = item.querySelector('.s-item_price .POSITIVE.ITALIC');
-      if (priceEl) {
-        soldPrice = priceEl.textContent.trim();
-      } else {
-        // Fallback selectors
-        const priceSelectors = [
-          '.s-item_price .POSITIVE',
-          '.s-item__price .notranslate', 
-          '.s-item__price', 
-          '[data-testid="item-price"]',
-          '.s-item_price'
-        ];
-        
-        for (const selector of priceSelectors) {
-          const fallbackPriceEl = item.querySelector(selector);
-          if (fallbackPriceEl) {
-            soldPrice = fallbackPriceEl.textContent.trim();
-            break;
-          }
+      for (const selector of priceSelectors) {
+        const priceEl = item.querySelector(selector);
+        if (priceEl) {
+          soldPrice = priceEl.textContent.trim();
+          // Clean up price - keep only the price part
+          soldPrice = soldPrice.replace(/\s*to\s*\$.*$/i, ''); // Remove price ranges
+          break;
         }
       }
-      
-      // Clean up price
-      soldPrice = soldPrice.replace(/\s*to\s*\$.*$/i, ''); // Remove price ranges
 
       if (index === 1) {
         console.log(`Sample price: "${soldPrice}"`);
       }
 
-      // UPDATED: Get sold date from new eBay structure
+      // RESTORED: Get sold date using COMPREHENSIVE WORKING LOGIC from previous code
       let soldDate = '';
       
-      // Primary selector for sold date in caption area
-      const dateEl = item.querySelector('.s-item_caption span');
-      if (dateEl) {
-        const dateText = dateEl.textContent.trim();
-        if (dateText.toLowerCase().includes('sold')) {
-          soldDate = dateText;
+      // First try specific date selectors
+      const dateSelectors = [
+        '.s-item__title--tag .POSITIVE', 
+        '.s-item__ended-date',
+        '.s-item__detail--secondary',
+        '.s-item__caption--signal',
+        '.s-item__subtitle',
+        '.s-item__watchheart-label'
+      ];
+      
+      for (const selector of dateSelectors) {
+        const dateEl = item.querySelector(selector);
+        if (dateEl && dateEl.textContent.toLowerCase().includes('sold')) {
+          soldDate = dateEl.textContent.trim();
+          break;
         }
       }
       
-      // Fallback selectors
+      // If no date found, do comprehensive text search - PROVEN WORKING METHOD
       if (!soldDate) {
-        const dateSelectors = [
-          '.s-item__title--tag .POSITIVE', 
-          '.s-item__ended-date',
-          '.s-item_caption'
-        ];
-        
-        for (const selector of dateSelectors) {
-          const fallbackDateEl = item.querySelector(selector);
-          if (fallbackDateEl) {
-            const text = fallbackDateEl.textContent.trim();
-            if (text.toLowerCase().includes('sold')) {
-              soldDate = text;
+        // Get all text content from the item
+        const allTextElements = item.querySelectorAll('*');
+        for (const element of allTextElements) {
+          const text = element.textContent || '';
+          
+          // Look for various sold date patterns - WORKING REGEX PATTERNS
+          const soldPatterns = [
+            /Sold\s+(\d{1,2}\s+\w{3}\s+\d{4})/i,           // "Sold 13 Aug 2025"
+            /Sold\s+(\w{3}\s+\d{1,2},?\s+\d{4})/i,         // "Sold Aug 13, 2025" or "Sold Aug 13 2025"
+            /Sold\s+(\d{1,2}\/\d{1,2}\/\d{4})/i,           // "Sold 8/13/2025"
+            /Sold\s+(\d{1,2}-\w{3}-\d{2})/i,               // "Sold 13-Aug-25"
+            /Sold\s+(.{1,15}ago)/i,                        // "Sold 2 days ago"
+            /(\d{1,2}\s+\w{3}\s+\d{4}).*sold/i,            // "13 Aug 2025 sold"
+            /sold.*(\d{1,2}\s+\w{3}\s+\d{4})/i             // "sold 13 Aug 2025"
+          ];
+          
+          for (const pattern of soldPatterns) {
+            const match = text.match(pattern);
+            if (match) {
+              soldDate = match[1].trim();
               break;
             }
           }
+          
+          if (soldDate) break;
         }
       }
-
-      // Final fallback - search all text for sold date
+      
+      // Also check if there's a date in a data attribute - WORKING METHOD
       if (!soldDate) {
-        const titleText = item.textContent;
-        const soldMatch = titleText.match(/Sold\s+([^$]+)/i);
-        if (soldMatch) {
-          soldDate = soldMatch[1].trim();
-          // Clean up any extra characters
-          soldDate = soldDate.split('==')[0].trim();
+        const dateAttrs = ['data-sold-date', 'data-end-date', 'data-listing-date'];
+        for (const attr of dateAttrs) {
+          const attrValue = item.getAttribute(attr);
+          if (attrValue) {
+            soldDate = attrValue;
+            break;
+          }
         }
       }
-
-      if (index === 1) {
-        console.log(`Sample date: "${soldDate}"`);
+      
+      // Clean up the date - WORKING CLEANUP
+      if (soldDate) {
+        soldDate = soldDate
+          .replace(/^\s*Sold\s*/i, '')
+          .replace(/\s*•.*$/, '')
+          .replace(/\s*\(.*\)/, '')
+          .trim();
       }
+      
+      console.log(`Item: ${itemName.substring(0, 50)}... - Found date: "${soldDate}"`);  // Debug log
 
       // Get image
-      const imageSelectors = ['.s-item__image img', '.s-item__wrapper img', '.s-item_image img'];
+      const imageSelectors = ['.s-item__image img', '.s-item__wrapper img'];
       let imageUrl = '';
       for (const selector of imageSelectors) {
         const imgEl = item.querySelector(selector);
@@ -263,18 +214,19 @@ function extractListingData(html) {
         }
       }
 
-      // Get URL - look for main item link
+      // Get URL - WORKING METHOD
       let itemUrl = '';
-      const linkEl = item.querySelector('a[href*="/itm/"], a[href*="ebay.com"]');
+      const linkEl = item.querySelector('a[href]');
       if (linkEl) {
         itemUrl = linkEl.href;
+        // Clean up eBay URLs
         if (itemUrl.includes('ebay.')) {
           itemUrl = itemUrl.split('?')[0]; // Remove tracking parameters
         }
       }
 
-      // Only add items that have both name and price
-      if (itemName && soldPrice && itemName.length > 5) {
+      // Only add items with clean data - WORKING VALIDATION
+      if (itemName && soldPrice && itemName.length > 10) {
         listings.push({
           itemName: itemName,
           soldPrice: soldPrice,

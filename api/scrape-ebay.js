@@ -95,7 +95,7 @@ function extractListingData(html) {
       }
 
       if (index === 1) {
-        console.log(`Sample item name: "${itemName}"`);
+        console.log(`Sample item name RAW: "${itemName}"`);
       }
 
       // Filter out promotional/ad items
@@ -113,18 +113,40 @@ function extractListingData(html) {
         return; // Skip this item
       }
 
-      // Clean up the title - remove eBay interface elements
+      // ENHANCED: Clean up the title - remove ALL eBay interface elements
       itemName = itemName
         .replace(/^New Listing/i, '')
         .replace(/Opens in a new window or tab.*$/i, '')
-        .replace(/Pre-Owned.*$/i, 'Pre-Owned')
+        .replace(/Pre-Owned.*$/i, '')
+        .replace(/New \(Other\).*$/i, '')
+        .replace(/Used.*$/i, '')
         .replace(/View similar active items.*$/i, '')
         .replace(/Sell one like this.*$/i, '')
         .replace(/Buy It Now.*$/i, '')
+        .replace(/Best Offer.*$/i, '')
         .replace(/\$[\d,]+\.?\d*.*$/i, '') // Remove price info mixed in title
         .replace(/Located in.*$/i, '')
         .replace(/\d+% positive.*$/i, '')
+        .replace(/\d+ bids.*$/i, '')
+        .replace(/\+\$[\d,]+\.?\d* delivery.*$/i, '')
+        .replace(/Free shipping.*$/i, '')
+        .replace(/\s+delivery.*$/i, '')
+        .replace(/Click to view.*$/i, '')
         .trim();
+
+      // Remove any trailing condition info that got mixed in
+      itemName = itemName
+        .replace(/\s*-\s*Pre-Owned\s*$/i, '')
+        .replace(/\s*-\s*New\s*$/i, '')
+        .replace(/\s*-\s*Used\s*$/i, '')
+        .replace(/\s*Pre-Owned\s*$/i, '')
+        .replace(/\s*New\s*$/i, '')
+        .replace(/\s*Used\s*$/i, '')
+        .trim();
+      
+      if (index === 1) {
+        console.log(`Sample item name CLEANED: "${itemName}"`);
+      }
       
       if (itemName.length > 100) {
         itemName = itemName.substring(0, 100) + '...';

@@ -1,4 +1,4 @@
-// api/scrape-ebay.js - Vercel Serverless Function - FIXED WITH WORKING LOGIC
+// api/scrape-ebay.js - Vercel Serverless Function - WITH PROGRESSIVE LOADING SUPPORT
 const { HttpsProxyAgent } = require('https-proxy-agent');
 const fetch = require('node-fetch');
 const { JSDOM } = require('jsdom');
@@ -7,7 +7,7 @@ const { JSDOM } = require('jsdom');
 const DECODO_PROXY = 'http://sp4c5esam0:j1w8CnMf2ktsLz=m8A@us.decodo.com:10001';
 const proxyAgent = new HttpsProxyAgent(DECODO_PROXY);
 
-// Helper function to build eBay URL
+// Helper function to build eBay URL - UPDATED TO SUPPORT SPECIFIC PAGE
 function buildEbayUrl(searchTerm, pageNumber = 1) {
   // Add randomization to avoid caching
   const timestamp = Date.now();
@@ -44,7 +44,7 @@ function buildEbayUrl(searchTerm, pageNumber = 1) {
   return url;
 }
 
-// Helper function to extract listing data - USING WORKING LOGIC FROM PREVIOUS CODE
+// Helper function to extract listing data - USING WORKING LOGIC
 function extractListingData(html) {
   console.log('Starting data extraction...');
   
@@ -67,7 +67,7 @@ function extractListingData(html) {
     if (index === 0) return; // Skip first item (usually ad)
 
     try {
-      // RESTORED: Get clean item name using WORKING selectors from previous code
+      // Get clean item name using WORKING selectors
       const nameSelectors = ['.s-item__title', '[data-testid="item-title"]', '.it-ttl a', 'h3 a'];
       let itemName = '';
       for (const selector of nameSelectors) {
@@ -111,7 +111,7 @@ function extractListingData(html) {
         return; // Skip this item
       }
 
-      // RESTORED: Get clean sold price using WORKING selectors
+      // Get clean sold price using WORKING selectors
       const priceSelectors = ['.s-item__price .notranslate', '.s-item__price', '[data-testid="item-price"]'];
       let soldPrice = '';
       for (const selector of priceSelectors) {
@@ -128,7 +128,7 @@ function extractListingData(html) {
         console.log(`Sample price: "${soldPrice}"`);
       }
 
-      // RESTORED: Get sold date using COMPREHENSIVE WORKING LOGIC from previous code
+      // Get sold date using COMPREHENSIVE WORKING LOGIC
       let soldDate = '';
       
       // First try specific date selectors
@@ -257,8 +257,8 @@ async function scrapePage(searchTerm, page) {
   const url = buildEbayUrl(searchTerm, page);
   
   try {
-    // Add randomization to avoid detection
-    const randomDelay = Math.floor(Math.random() * 1000) + 500; // 500-1500ms delay
+    // Reduced delay for progressive loading
+    const randomDelay = Math.floor(Math.random() * 500) + 200; // 200-700ms delay
     await new Promise(resolve => setTimeout(resolve, randomDelay));
     
     const response = await fetch(url, {
@@ -298,7 +298,7 @@ async function scrapePage(searchTerm, page) {
   }
 }
 
-// Main serverless function handler
+// Main serverless function handler - UPDATED FOR PROGRESSIVE LOADING
 export default async function handler(req, res) {
   // Set CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -317,48 +317,59 @@ export default async function handler(req, res) {
     return;
   }
 
-  const { searchTerm, pages = 3 } = req.body;
+  const { searchTerm, pages = 1, startPage = 1 } = req.body;
   
   if (!searchTerm) {
     res.status(400).json({ error: 'Search term is required' });
     return;
   }
 
-  console.log(`🚀 Starting scrape for "${searchTerm}" - ${pages} pages`);
+  console.log(`🚀 Starting scrape for "${searchTerm}" - ${pages} pages (starting from page ${startPage})`);
   const startTime = Date.now();
   
   try {
     const allResults = [];
     
-    console.log(`Debug: Starting scrape for "${searchTerm}" with ${pages} pages`);
-    
-    // Process pages in parallel for maximum speed
-    const pagePromises = [];
-    for (let page = 1; page <= pages; page++) {
-      pagePromises.push(scrapePage(searchTerm, page));
+    // PROGRESSIVE LOADING: Support single page requests
+    if (pages === 1 && startPage > 1) {
+      // Progressive mode: scrape specific single page
+      console.log(`Progressive mode: Scraping page ${startPage} only`);
+      const pageResult = await scrapePage(searchTerm, startPage);
+      allResults.push(...pageResult);
+    } else {
+      // Normal mode: scrape multiple pages or page 1
+      console.log(`Normal mode: Scraping ${pages} pages starting from page ${startPage}`);
+      
+      // Process pages - support both modes
+      const pagePromises = [];
+      for (let page = startPage; page < startPage + pages; page++) {
+        pagePromises.push(scrapePage(searchTerm, page));
+      }
+      
+      const pageResults = await Promise.all(pagePromises);
+      
+      // Combine all results
+      pageResults.forEach((results, index) => {
+        console.log(`Page ${startPage + index} returned ${results.length} items`);
+        allResults.push(...results);
+      });
     }
-    
-    const pageResults = await Promise.all(pagePromises);
-    
-    // Combine all results
-    pageResults.forEach((results, index) => {
-      console.log(`Page ${index + 1} returned ${results.length} items`);
-      allResults.push(...results);
-    });
     
     const endTime = Date.now();
     const duration = ((endTime - startTime) / 1000).toFixed(1);
     
     console.log(`✅ Completed in ${duration}s - Total items found: ${allResults.length}`);
     
-    // Return results even if empty for debugging
+    // Return results
     res.status(200).json({
       success: true,
       searchTerm,
       totalItems: allResults.length,
       pages,
+      startPage,
       duration,
       data: allResults,
+      progressiveMode: pages === 1 && startPage > 1,
       debug: allResults.length === 0 ? 'Check Vercel function logs for parsing details' : undefined
     });
     

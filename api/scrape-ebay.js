@@ -44,7 +44,7 @@ function buildEbayUrl(searchTerm, pageNumber = 1) {
   return url;
 }
 
-// Helper function to extract listing data
+// Helper function to extract listing data - UPDATED FOR NEW EBAY LAYOUT
 function extractListingData(html) {
   console.log('Starting data extraction...');
   
@@ -52,6 +52,7 @@ function extractListingData(html) {
   const doc = dom.window.document;
   const listings = [];
 
+  // Updated selectors for current eBay layout
   const itemSelectors = ['.s-item', '[data-testid="item-cell"]', '.srp-item'];
   let items = [];
   
@@ -67,14 +68,29 @@ function extractListingData(html) {
     if (index === 0) return; // Skip first item (usually ad)
 
     try {
-      // Get item name
-      const nameSelectors = ['.s-item__title', '[data-testid="item-title"]', '.it-ttl a', 'h3 a'];
+      // UPDATED: Get item name from new eBay structure
       let itemName = '';
-      for (const selector of nameSelectors) {
-        const nameEl = item.querySelector(selector);
-        if (nameEl) {
-          itemName = nameEl.textContent.trim();
-          break;
+      
+      // Primary selector for new layout
+      const titleEl = item.querySelector('.s-item_title span[role="heading"]');
+      if (titleEl) {
+        itemName = titleEl.textContent.trim();
+      } else {
+        // Fallback selectors
+        const fallbackSelectors = [
+          '.s-item__title', 
+          '[data-testid="item-title"]', 
+          '.it-ttl a', 
+          'h3 a',
+          '.s-item_title'
+        ];
+        
+        for (const selector of fallbackSelectors) {
+          const nameEl = item.querySelector(selector);
+          if (nameEl) {
+            itemName = nameEl.textContent.trim();
+            break;
+          }
         }
       }
 
@@ -97,57 +113,105 @@ function extractListingData(html) {
         return; // Skip this item
       }
 
-      // Clean up the title
+      // Clean up the title - remove eBay interface elements
       itemName = itemName
         .replace(/^New Listing/i, '')
         .replace(/Opens in a new window or tab.*$/i, '')
         .replace(/Pre-Owned.*$/i, 'Pre-Owned')
         .replace(/View similar active items.*$/i, '')
         .replace(/Sell one like this.*$/i, '')
+        .replace(/Buy It Now.*$/i, '')
+        .replace(/\$[\d,]+\.?\d*.*$/i, '') // Remove price info mixed in title
+        .replace(/Located in.*$/i, '')
+        .replace(/\d+% positive.*$/i, '')
         .trim();
       
-      if (itemName.length > 80) {
-        itemName = itemName.substring(0, 80) + '...';
+      if (itemName.length > 100) {
+        itemName = itemName.substring(0, 100) + '...';
       }
 
-      // Get sold price
-      const priceSelectors = ['.s-item__price .notranslate', '.s-item__price', '[data-testid="item-price"]'];
+      // UPDATED: Get sold price from new eBay structure
       let soldPrice = '';
-      for (const selector of priceSelectors) {
-        const priceEl = item.querySelector(selector);
-        if (priceEl) {
-          soldPrice = priceEl.textContent.trim();
-          soldPrice = soldPrice.replace(/\s*to\s*\$.*$/i, ''); // Remove price ranges
-          break;
+      
+      // Primary selector for new layout - look for POSITIVE ITALIC span
+      const priceEl = item.querySelector('.s-item_price .POSITIVE.ITALIC');
+      if (priceEl) {
+        soldPrice = priceEl.textContent.trim();
+      } else {
+        // Fallback selectors
+        const priceSelectors = [
+          '.s-item_price .POSITIVE',
+          '.s-item__price .notranslate', 
+          '.s-item__price', 
+          '[data-testid="item-price"]',
+          '.s-item_price'
+        ];
+        
+        for (const selector of priceSelectors) {
+          const fallbackPriceEl = item.querySelector(selector);
+          if (fallbackPriceEl) {
+            soldPrice = fallbackPriceEl.textContent.trim();
+            break;
+          }
         }
       }
+      
+      // Clean up price
+      soldPrice = soldPrice.replace(/\s*to\s*\$.*$/i, ''); // Remove price ranges
 
       if (index === 1) {
         console.log(`Sample price: "${soldPrice}"`);
       }
 
-      // Get sold date
-      const dateSelectors = ['.s-item__title--tag .POSITIVE', '.s-item__ended-date'];
+      // UPDATED: Get sold date from new eBay structure
       let soldDate = '';
-      for (const selector of dateSelectors) {
-        const dateEl = item.querySelector(selector);
-        if (dateEl) {
-          soldDate = dateEl.textContent.trim();
-          break;
+      
+      // Primary selector for sold date in caption area
+      const dateEl = item.querySelector('.s-item_caption span');
+      if (dateEl) {
+        const dateText = dateEl.textContent.trim();
+        if (dateText.toLowerCase().includes('sold')) {
+          soldDate = dateText;
+        }
+      }
+      
+      // Fallback selectors
+      if (!soldDate) {
+        const dateSelectors = [
+          '.s-item__title--tag .POSITIVE', 
+          '.s-item__ended-date',
+          '.s-item_caption'
+        ];
+        
+        for (const selector of dateSelectors) {
+          const fallbackDateEl = item.querySelector(selector);
+          if (fallbackDateEl) {
+            const text = fallbackDateEl.textContent.trim();
+            if (text.toLowerCase().includes('sold')) {
+              soldDate = text;
+              break;
+            }
+          }
         }
       }
 
-      // Fallback date extraction
+      // Final fallback - search all text for sold date
       if (!soldDate) {
         const titleText = item.textContent;
-        const soldMatch = titleText.match(/Sold\s+(.+)/i);
+        const soldMatch = titleText.match(/Sold\s+([^$]+)/i);
         if (soldMatch) {
           soldDate = soldMatch[1].trim();
+          // Clean up any extra characters
+          soldDate = soldDate.split('==')[0].trim();
         }
+      }
+
+      if (index === 1) {
+        console.log(`Sample date: "${soldDate}"`);
       }
 
       // Get image
-      const imageSelectors = ['.s-item__image img', '.s-item__wrapper img'];
+      const imageSelectors = ['.s-item__image img', '.s-item__wrapper img', '.s-item_image img'];
       let imageUrl = '';
       for (const selector of imageSelectors) {
         const imgEl = item.querySelector(selector);
@@ -158,9 +222,9 @@ function extractListingData(html) {
         }
       }
 
-      // Get URL
+      // Get URL - look for main item link
       let itemUrl = '';
-      const linkEl = item.querySelector('a[href]');
+      const linkEl = item.querySelector('a[href*="/itm/"], a[href*="ebay.com"]');
       if (linkEl) {
         itemUrl = linkEl.href;
         if (itemUrl.includes('ebay.')) {
@@ -168,7 +232,8 @@ function extractListingData(html) {
         }
       }
 
-      if (itemName && soldPrice) {
+      // Only add items that have both name and price
+      if (itemName && soldPrice && itemName.length > 5) {
         listings.push({
           itemName: itemName,
           soldPrice: soldPrice,
@@ -178,11 +243,11 @@ function extractListingData(html) {
         });
         
         if (listings.length === 1) {
-          console.log(`First valid item added: ${itemName} - ${soldPrice}`);
+          console.log(`First valid item added: ${itemName} - ${soldPrice} - ${soldDate}`);
         }
       } else {
-        if (index === 1) {
-          console.log(`Item skipped - Name: "${itemName}", Price: "${soldPrice}"`);
+        if (index <= 3) {
+          console.log(`Item ${index} skipped - Name: "${itemName}" (${itemName.length} chars), Price: "${soldPrice}"`);
         }
       }
     } catch (error) {

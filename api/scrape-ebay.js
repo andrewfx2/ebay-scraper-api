@@ -68,28 +68,47 @@ function extractListingData(html) {
     if (index === 0) return; // Skip first item (usually ad)
 
     try {
-      // UPDATED: Get item name from new eBay structure
+      // UPDATED: Get item name from new eBay structure - Target the actual link
       let itemName = '';
       
-      // Primary selector for new layout
-      const titleEl = item.querySelector('.s-item_title span[role="heading"]');
-      if (titleEl) {
-        itemName = titleEl.textContent.trim();
-      } else {
-        // Fallback selectors
-        const fallbackSelectors = [
-          '.s-item__title', 
-          '[data-testid="item-title"]', 
-          '.it-ttl a', 
-          'h3 a',
-          '.s-item_title'
-        ];
-        
-        for (const selector of fallbackSelectors) {
-          const nameEl = item.querySelector(selector);
-          if (nameEl) {
-            itemName = nameEl.textContent.trim();
-            break;
+      // Try to get clean title from the actual item link first
+      const linkSelectors = [
+        '.s-item_title a', 
+        '.s-item__title a',
+        'h3 a',
+        '.it-ttl a'
+      ];
+      
+      for (const selector of linkSelectors) {
+        const linkEl = item.querySelector(selector);
+        if (linkEl && linkEl.textContent.trim()) {
+          itemName = linkEl.textContent.trim();
+          console.log(`Found title via link (${selector}): "${itemName}"`);
+          break;
+        }
+      }
+      
+      // If no clean link text found, try other methods
+      if (!itemName) {
+        const titleEl = item.querySelector('.s-item_title span[role="heading"]');
+        if (titleEl) {
+          itemName = titleEl.textContent.trim();
+          console.log(`Found title via span: "${itemName}"`);
+        } else {
+          // Final fallback selectors
+          const fallbackSelectors = [
+            '.s-item__title', 
+            '[data-testid="item-title"]',
+            '.s-item_title'
+          ];
+          
+          for (const selector of fallbackSelectors) {
+            const nameEl = item.querySelector(selector);
+            if (nameEl) {
+              itemName = nameEl.textContent.trim();
+              console.log(`Found title via fallback (${selector}): "${itemName}"`);
+              break;
+            }
           }
         }
       }

@@ -205,15 +205,9 @@ async function scrapePage(searchTerm, page) {
     }
 
     const html = await response.text();
-    
-    // Debug: Log what we got from eBay
-    console.log(`Page ${page} HTML length: ${html.length}`);
-    console.log(`Page ${page} HTML sample:`, html.substring(0, 500));
-    
     const listings = extractListingData(html);
     
     console.log(`✅ Page ${page}: Found ${listings.length} items`);
-    
     return listings;
     
   } catch (error) {

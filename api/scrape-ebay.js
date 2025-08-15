@@ -9,6 +9,10 @@ const proxyAgent = new HttpsProxyAgent(DECODO_PROXY);
 
 // Helper function to build eBay URL
 function buildEbayUrl(searchTerm, pageNumber = 1) {
+  // Add randomization to avoid caching
+  const timestamp = Date.now();
+  const random = Math.floor(Math.random() * 10000);
+  
   const params = new URLSearchParams({
     '_nkw': searchTerm,
     '_in_kw': '1',
@@ -30,10 +34,11 @@ function buildEbayUrl(searchTerm, pageNumber = 1) {
     '_pgn': pageNumber.toString(),
     'rt': 'nc', // No cache
     '_fcid': '1', // Force US site
-    'LH_PrefLoc': '1' // Prefer US/North America locations
+    'LH_PrefLoc': '1', // Prefer US/North America locations
+    '_t': timestamp, // Timestamp to bust cache
+    '_r': random // Random number for uniqueness
   });
 
-  // Use ebay.com explicitly (not regional variant)
   const url = `https://www.ebay.com/sch/i.html?${params.toString()}`;
   console.log(`Built URL for page ${pageNumber}: ${url}`);
   return url;
@@ -194,10 +199,14 @@ async function scrapePage(searchTerm, page) {
   const url = buildEbayUrl(searchTerm, page);
   
   try {
+    // Add randomization to avoid detection
+    const randomDelay = Math.floor(Math.random() * 1000) + 500; // 500-1500ms delay
+    await new Promise(resolve => setTimeout(resolve, randomDelay));
+    
     const response = await fetch(url, {
       agent: proxyAgent,
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'User-Agent': `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.${Math.floor(Math.random() * 9999)}.0 Safari/537.36`,
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
         'Accept-Language': 'en-US,en;q=0.9',
         'Accept-Encoding': 'gzip, deflate, br',
@@ -208,9 +217,10 @@ async function scrapePage(searchTerm, page) {
         'Sec-Fetch-Mode': 'navigate',
         'Sec-Fetch-Site': 'none',
         'Sec-Fetch-User': '?1',
-        'Cache-Control': 'max-age=0',
-        'X-Forwarded-For': '192.168.1.1', // US IP simulation
-        'CF-IPCountry': 'US' // Cloudflare country header
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+        'X-Forwarded-For': `192.168.${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}`,
+        'CF-IPCountry': 'US'
       }
     });
 

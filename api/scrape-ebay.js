@@ -28,9 +28,12 @@ function buildEbayUrl(searchTerm, pageNumber = 1) {
     '_dmd': '1',
     '_ipg': '60',
     '_pgn': pageNumber.toString(),
-    'rt': 'nc' // No cache
+    'rt': 'nc', // No cache
+    '_fcid': '1', // Force US site
+    'LH_PrefLoc': '1' // Prefer US/North America locations
   });
 
+  // Use ebay.com explicitly (not regional variant)
   const url = `https://www.ebay.com/sch/i.html?${params.toString()}`;
   console.log(`Built URL for page ${pageNumber}: ${url}`);
   return url;
@@ -205,7 +208,9 @@ async function scrapePage(searchTerm, page) {
         'Sec-Fetch-Mode': 'navigate',
         'Sec-Fetch-Site': 'none',
         'Sec-Fetch-User': '?1',
-        'Cache-Control': 'max-age=0'
+        'Cache-Control': 'max-age=0',
+        'X-Forwarded-For': '192.168.1.1', // US IP simulation
+        'CF-IPCountry': 'US' // Cloudflare country header
       }
     });
 
